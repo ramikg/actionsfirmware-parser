@@ -1,0 +1,105 @@
+//------------------------------------------------
+// File Mask: *.gz
+// ID Bytes:  41 63 74 69 6F 6E 73 46 69 72 6D 77 61 72 65
+//------------------------------------------------
+
+typedef struct {
+    char magic[16];
+    Assert(!Strcmp(magic, "ActionsFirmware"), "Not ActionsFirmware.");
+
+    char version_string[16];
+    Assert(Strstr(version_string, "UpdateVer:v") == 0, "Invalid version string.");
+    
+    char checksum_string[16];
+    Assert(!Strcmp(checksum_string, "CHECKSUM") && Strlen(checksum_string) == Strlen("CHECKSUM"), "Invalid checksum string.");
+
+    uint32 first_section_offset <format=hex>;
+    uint32 content_length <format=hex>;
+    uint32 always_zero <format=hex>;
+
+    uint32 checksum <format=hex>;
+    local uint32 calculated_checksum = Checksum(CHECKSUM_INT_LE, this.first_section_offset);
+    Assert(calculated_checksum == checksum, "Bad firmware checksum.");
+} ActionsFirmwareHeader;
+
+local uint64 SECTION_HEADER_LENGTH = 32;
+local uint64 original_position = -1;
+// Start of variables used for scripts
+local uint64 rootfs_section_index = -1;
+local uint64 number_of_rootfs_chunks = 0;
+local uint64 total_length_of_rootfs_chunks = 0;
+// End of variables used for scripts
+
+typedef struct (uint64 rootfs_chunk_offset) {
+    uint length <format=hex>;
+    uint unknown1 <format=hex>;
+    uint checksum <format=hex>;
+    uint unknown2 <format=hex>;
+    original_position = FTell();
+    FSeek(rootfs_chunk_offset);
+    char data[this.length];
+    FSeek(original_position);
+
+    local uint32 calculated_checksum = Checksum(CHECKSUM_INT_LE, rootfs_chunk_offset, this.length);
+    Assert(calculated_checksum == checksum, "Bad rootfs chunk checksum.");
+} RootfsChunk;
+
+typedef struct {
+    char name[16];
+    uint32 offset <format=hex>;
+    uint32 length <format=hex>;;
+    uint32 unknown1 <format=hex>;
+    uint32 unknown2 <format=hex>;
+
+    original_position = FTell();
+    FSeek(this.offset);
+    if (!Strcmp(this.name, "FIRM"))
+    {
+        char data[this.unknown2];
+    }
+    else if (!Strcmp(this.name, "rootfs"))
+    {
+        rootfs_section_index = (original_position - header.first_section_offset) / SECTION_HEADER_LENGTH - 1;
+
+        local uint64 MAX_NUMBER_OF_ROOTFS_CHUNKS = 32;
+        local uint64 FIRST_ROOTFS_CHUNK_OFFSET = 0x200;
+        local uint64 PADDING_LENGTH = 0x200;
+        local uint64 number_of_padding_bytes = 0;
+        local uint64 current_rootfs_chunk_index = 0;
+        local uint64 current_rootfs_chunk_offset = this.offset + FIRST_ROOTFS_CHUNK_OFFSET;
+
+        for (current_rootfs_chunk_index = 0; current_rootfs_chunk_index < MAX_NUMBER_OF_ROOTFS_CHUNKS; ++current_rootfs_chunk_index)
+        {
+            if (ReadByte() == 0)
+            {
+                break;
+            }
+            
+            RootfsChunk rootfs_chunk(current_rootfs_chunk_offset);
+            number_of_padding_bytes = PADDING_LENGTH - (rootfs_chunk.length % PADDING_LENGTH);
+            current_rootfs_chunk_offset += rootfs_chunk.length + number_of_padding_bytes;
+
+            total_length_of_rootfs_chunks += rootfs_chunk.length;
+            ++number_of_rootfs_chunks;
+        }
+    }
+    else if (Strcmp(this.name, "LINUX"))
+    {
+        char data[this.length];
+    }
+
+    FSeek(original_position);
+} Section <read=name>;
+
+LittleEndian();
+ActionsFirmwareHeader header;
+local uint64 number_of_sections;
+while (FTell() + SECTION_HEADER_LENGTH < FileSize())
+{
+    if (ReadByte() == 0)
+    {
+        break;
+    }
+    Section sections;
+    ++number_of_sections;
+}

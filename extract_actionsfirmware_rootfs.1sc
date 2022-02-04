@@ -1,0 +1,23 @@
+int original_file = GetFileNum();
+RunTemplate("ActionsFirmware.bt");
+int rootfs_gz_file = FileNew("Hex", false);
+FileSelect(original_file);
+
+uchar buf[total_length_of_rootfs_chunks];
+local uint64 current_rootfs_chunk_index = 0;
+local uint64 number_of_bytes_written = 0;
+local uint64 chunk_length = 0;
+for (current_rootfs_chunk_index = 0; current_rootfs_chunk_index < number_of_rootfs_chunks; ++current_rootfs_chunk_index)
+{
+    chunk_length = sections[rootfs_section_index].rootfs_chunk[current_rootfs_chunk_index].length;
+    Memcpy(buf, sections[rootfs_section_index].rootfs_chunk[current_rootfs_chunk_index].data, chunk_length, number_of_bytes_written);
+    number_of_bytes_written += chunk_length;
+}
+
+char outputFileName[] = FileNameSetExtension(GetFileName(), "rootfs.gz");
+
+FileSelect(rootfs_gz_file);
+WriteBytes(buf, 0, number_of_bytes_written);
+
+FileSave(outputFileName);
+FileClose();
