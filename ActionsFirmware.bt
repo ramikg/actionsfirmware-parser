@@ -23,7 +23,6 @@ typedef struct {
 } ActionsFirmwareHeader;
 
 local uint64 SECTION_HEADER_LENGTH = 32;
-local uint64 original_position = -1;
 // Start of variables used for scripts
 local uint64 rootfs_section_index = -1;
 local uint64 number_of_rootfs_chunks = 0;
@@ -35,7 +34,8 @@ typedef struct (uint64 rootfs_chunk_offset) {
     uint unknown1 <format=hex>;
     uint checksum <format=hex>;
     uint unknown2 <format=hex>;
-    original_position = FTell();
+
+    local uint64 original_position = FTell();
     FSeek(rootfs_chunk_offset);
     char data[this.length];
     FSeek(original_position);
@@ -51,8 +51,9 @@ typedef struct {
     uint32 unknown1 <format=hex>;
     uint32 unknown2 <format=hex>;
 
-    original_position = FTell();
+    local uint64 original_position = FTell();
     FSeek(this.offset);
+
     if (!Strcmp(this.name, "FIRM"))
     {
         char data[this.unknown2];
@@ -83,7 +84,7 @@ typedef struct {
             ++number_of_rootfs_chunks;
         }
     }
-    else if (Strcmp(this.name, "LINUX"))
+    else if (FTell() + this.length <= FileSize() && Strcmp(this.name, "LINUX"))
     {
         char data[this.length];
     }
